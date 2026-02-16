@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from discord import Forbidden, HTTPException
-from datetime import datetime, timezone
 
 from src.helpers.ban import _check_member, _dm_banned_member, ban_member
 from src.helpers.responses import SimpleResponse
