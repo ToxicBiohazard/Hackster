@@ -1,6 +1,9 @@
 """Helpers for minor flagging and parental consent verification."""
 
 import asyncio
+import hashlib
+import hmac
+import json
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -31,22 +34,57 @@ async def check_parental_consent(account_identifier: str) -> bool:
     Check if parental consent form exists via Cloud Function.
 
     POST to PARENTAL_CONSENT_CHECK_URL with file_name set to the user's SSO UUID.
-    Returns True if consent exists (e.g. 200), False otherwise (404, timeout, error).
+    Returns True iff the function responds with HTTP 200 and a JSON body
+    containing {"exist": true}. Any other response is treated as no consent.
     """
     if not account_identifier:
         return False
+
     url = getattr(settings, "PARENTAL_CONSENT_CHECK_URL", None) or ""
     if not url:
         logger.warning("PARENTAL_CONSENT_CHECK_URL not set; consent check skipped.")
         return False
+
+    secret = getattr(settings, "PARENTAL_CONSENT_SECRET", None) or ""
+    if not secret:
+        logger.warning("PARENTAL_CONSENT_SECRET not set; consent check skipped.")
+        return False
+
+    payload = {"file_name": account_identifier}
+    body_bytes = json.dumps(payload).encode("utf-8")
+    signature = hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha1).hexdigest()
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 url,
-                json={"file_name": account_identifier},
+                data=body_bytes,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Signature": signature,
+                },
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
-                return resp.status == 200
+                body = await resp.text()
+                logger.info(
+                    "Parental consent check response for %s: status=%s body=%s",
+                    account_identifier,
+                    resp.status,
+                    body,
+                )
+                if resp.status != 200:
+                    return False
+
+                try:
+                    data = json.loads(body)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "Parental consent check returned non-JSON body for %s",
+                        account_identifier,
+                    )
+                    return False
+
+                return bool(data.get("exist"))
     except aiohttp.ClientError as e:
         logger.warning("Parental consent check request failed: %s", e)
         return False

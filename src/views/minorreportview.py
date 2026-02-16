@@ -207,10 +207,16 @@ class ApproveBanModal(Modal):
             status_notes=status_notes,
             htb_profile_url=htb_url,
         )
-        try:
-            await interaction.message.edit(embed=embed, view=self.parent_view)
-        except (HTTPException, NotFound):
-            pass
+        # After approval, disable further approval/denial on this message and
+        # change the recheck button label for this report only so reviewers
+        # clearly see that it will check consent and unban.
+        for child in self.parent_view.children:
+            if isinstance(child, _ApproveButton) or isinstance(child, _DenyButton):
+                child.disabled = True
+            if isinstance(child, _RecheckButton):
+                child.label = "Check Consent & Unban"
+        # Keep the view so reviewers can later recheck consent and unban if needed.
+        await self.parent_view._edit_report_message(interaction, embed, view=self.parent_view)
 
 
 class DenyReportModal(Modal):
@@ -298,6 +304,7 @@ class _DenyButton(Button):
 
 class _RecheckButton(Button):
     def __init__(self):
+        # Default label for newly created (pending) reports.
         super().__init__(label="Recheck Consent", style=discord.ButtonStyle.primary, custom_id=CUSTOM_ID_RECHECK)
 
     async def callback(self, interaction: Interaction) -> None:
@@ -372,19 +379,25 @@ class MinorReportView(View):
             return
         member = await self.bot.get_member_or_user(guild, report.user_id)
         if has_consent:
-            if member:
+            # Try to assign the minor role only if we have a real Member object.
+            if isinstance(member, Member):
                 await assign_minor_role(member, guild)
-            existing_ban = await get_ban(member) if member else None
+            existing_ban = await get_ban(member) if member else await get_ban(discord.Object(id=report.user_id))
             if existing_ban and report.associated_ban_id and existing_ban.id == report.associated_ban_id:
+                # Unban by member if present, otherwise by user id.
                 if member:
                     await unban_member(guild, member)
+                else:
+                    await unban_member(guild, discord.Object(id=report.user_id))
                 await interaction.followup.send(
-                    "Consent found. User unbanned and role assigned.",
+                    "Consent found. User unbanned."
+                    + (" Minor role assigned." if isinstance(member, Member) else " Minor role will be assigned when they rejoin."),
                     ephemeral=True,
                 )
             else:
                 await interaction.followup.send(
-                    "Consent found. Role assigned."
+                    "Consent found."
+                    + (" Minor role assigned." if isinstance(member, Member) else " Minor role will be assigned when they rejoin.")
                     + (" User was not banned by this report." if not existing_ban else ""),
                     ephemeral=True,
                 )
@@ -403,7 +416,9 @@ class MinorReportView(View):
                 f"<t:{int(datetime.now(timezone.utc).timestamp())}:F>"
             )
 
-        report.status = CONSENT_VERIFIED if has_consent else report.status
+        # Persist updated status/reviewer/timestamp
+        if has_consent:
+            report.status = CONSENT_VERIFIED
         report.reviewer_id = interaction.user.id
         report.updated_at = datetime.now(timezone.utc)
         async with AsyncSessionLocal() as session:
@@ -423,6 +438,7 @@ class MinorReportView(View):
             status_notes=status_notes,
             htb_profile_url=htb_url,
         )
-        await self._edit_report_message(
-            interaction, embed, self if report.status == PENDING else None
-        )
+        # If consent is found, this is a terminal state: remove all buttons.
+        # Otherwise, keep the existing view so reviewers can try rechecking again.
+        view = None if has_consent else self
+        await self._edit_report_message(interaction, embed, view)
