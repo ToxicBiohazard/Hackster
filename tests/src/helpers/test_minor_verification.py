@@ -12,6 +12,7 @@ from src.helpers.minor_verification import (
     CONSENT_VERIFIED,
     DENIED,
     PENDING,
+    assign_minor_role,
     calculate_ban_duration,
     check_parental_consent,
     get_account_identifier_for_discord,
@@ -374,3 +375,69 @@ class TestMinorVerificationHelpers:
         assert APPROVED == "approved"
         assert DENIED == "denied"
         assert CONSENT_VERIFIED == "consent_verified"
+
+    @pytest.mark.asyncio
+    async def test_assign_minor_role_success(self):
+        """Test assigning minor role when member does not have it."""
+        member = helpers.MockMember(id=1, name="User")
+        guild = helpers.MockGuild()
+        role = helpers.MockRole(id=456, name="Verified Minor")
+        member.roles = []
+        member.add_roles = AsyncMock()
+        guild.get_role = lambda id: role if id == 456 else None
+
+        with patch('src.helpers.minor_verification.settings') as mock_settings:
+            mock_settings.roles.VERIFIED_MINOR = 456
+            result = await assign_minor_role(member, guild)
+
+        assert result is True
+        member.add_roles.assert_called_once_with(role, atomic=True)
+
+    @pytest.mark.asyncio
+    async def test_assign_minor_role_already_has_role(self):
+        """Test assign_minor_role when member already has the role."""
+        role = helpers.MockRole(id=456, name="Verified Minor")
+        member = helpers.MockMember(id=1, name="User")
+        member.roles = [role]
+        member.add_roles = AsyncMock()
+        guild = helpers.MockGuild()
+        guild.get_role = lambda id: role if id == 456 else None
+
+        with patch('src.helpers.minor_verification.settings') as mock_settings:
+            mock_settings.roles.VERIFIED_MINOR = 456
+            result = await assign_minor_role(member, guild)
+
+        assert result is False
+        member.add_roles.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_assign_minor_role_role_not_found(self):
+        """Test assign_minor_role when guild does not have the role."""
+        member = helpers.MockMember(id=1, name="User")
+        guild = helpers.MockGuild()
+        guild.get_role = lambda id: None
+
+        with patch('src.helpers.minor_verification.settings') as mock_settings:
+            mock_settings.roles.VERIFIED_MINOR = 456
+            result = await assign_minor_role(member, guild)
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_assign_minor_role_forbidden(self):
+        """Test assign_minor_role when add_roles raises Forbidden."""
+        from discord import Forbidden
+
+        member = helpers.MockMember(id=1, name="User")
+        member.roles = []
+        fake_response = MagicMock(status=403)
+        member.add_roles = AsyncMock(side_effect=Forbidden(fake_response, "Forbidden"))
+        role = helpers.MockRole(id=456, name="Verified Minor")
+        guild = helpers.MockGuild()
+        guild.get_role = lambda id: role if id == 456 else None
+
+        with patch('src.helpers.minor_verification.settings') as mock_settings:
+            mock_settings.roles.VERIFIED_MINOR = 456
+            result = await assign_minor_role(member, guild)
+
+        assert result is False
