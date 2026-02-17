@@ -29,17 +29,17 @@ class TestFlagMinorCog:
         bot.get_member_or_user.return_value = user
 
         with (
-            patch('src.helpers.minor_verification.get_htb_user_id_for_discord', new_callable=AsyncMock) as get_link_mock,
-            patch('src.helpers.minor_verification.get_account_identifier_for_discord', new_callable=AsyncMock) as get_acct_mock,
-            patch('src.helpers.minor_verification.check_parental_consent', new_callable=AsyncMock) as consent_mock,
-            patch('src.helpers.minor_verification.get_active_minor_report', new_callable=AsyncMock) as get_report_mock,
+            patch('src.cmds.core.flag_minor.get_htb_user_id_for_discord', new_callable=AsyncMock) as get_link_mock,
+            patch('src.cmds.core.flag_minor.get_account_identifier_for_discord', new_callable=AsyncMock) as get_acct_mock,
+            patch('src.cmds.core.flag_minor.check_parental_consent', new_callable=AsyncMock) as consent_mock,
+            patch('src.cmds.core.flag_minor.get_active_minor_report', new_callable=AsyncMock) as get_report_mock,
             patch('src.cmds.core.flag_minor.AsyncSessionLocal') as session_mock,
             patch('src.cmds.core.flag_minor.settings') as mock_settings
         ):
-            # Mock settings roles
             mock_settings.roles.VERIFIED = 123
             mock_settings.roles.VERIFIED_MINOR = 456
-            
+            mock_settings.channels.MINOR_REVIEW = 999
+
             # Mock no HTB account linked
             get_link_mock.return_value = None
             get_acct_mock.return_value = None
@@ -49,9 +49,12 @@ class TestFlagMinorCog:
             mock_session = AsyncMock()
             session_mock.return_value.__aenter__.return_value = mock_session
 
-            # Mock message sent to review channel
+            # Mock review channel (command uses ctx.guild.get_channel)
             mock_message = helpers.MockMessage(id=12345)
-            ctx.bot.get_channel.return_value.send = AsyncMock(return_value=mock_message)
+            mock_channel = MagicMock()
+            mock_channel.send = AsyncMock(return_value=mock_message)
+            mock_channel.fetch_message = AsyncMock(return_value=mock_message)
+            ctx.guild.get_channel = MagicMock(return_value=mock_channel)
 
             cog = flag_minor.FlagMinorCog(bot)
             await cog.flag_minor.callback(
@@ -59,9 +62,7 @@ class TestFlagMinorCog:
             )
 
             # Assertions
-            # Command uses ctx.respond directly
             assert ctx.respond.called
-            # Verify command completed without error (ctx.respond was called)
 
     @pytest.mark.asyncio
     async def test_flag_minor_success_htb_account_no_consent(self, ctx, bot):
@@ -82,42 +83,37 @@ class TestFlagMinorCog:
         bot.get_member_or_user.return_value = user
 
         with (
-            patch('src.helpers.minor_verification.get_htb_user_id_for_discord', new_callable=AsyncMock) as get_link_mock,
-            patch('src.helpers.minor_verification.get_account_identifier_for_discord', new_callable=AsyncMock) as get_acct_mock,
-            patch('src.helpers.minor_verification.check_parental_consent', new_callable=AsyncMock) as consent_mock,
-            patch('src.helpers.minor_verification.get_active_minor_report', new_callable=AsyncMock) as get_report_mock,
+            patch('src.cmds.core.flag_minor.get_htb_user_id_for_discord', new_callable=AsyncMock) as get_link_mock,
+            patch('src.cmds.core.flag_minor.get_account_identifier_for_discord', new_callable=AsyncMock) as get_acct_mock,
+            patch('src.cmds.core.flag_minor.check_parental_consent', new_callable=AsyncMock) as consent_mock,
+            patch('src.cmds.core.flag_minor.get_active_minor_report', new_callable=AsyncMock) as get_report_mock,
             patch('src.cmds.core.flag_minor.AsyncSessionLocal') as session_mock,
             patch('src.cmds.core.flag_minor.settings') as mock_settings
         ):
-            # Mock settings roles
             mock_settings.roles.VERIFIED = 123
             mock_settings.roles.VERIFIED_MINOR = 456
-            
-            # Mock HTB account linked
-            get_link_mock.return_value = 123  # HTB user ID
-            get_acct_mock.return_value = "test-account-uuid"
-            get_report_mock.return_value = None  # No existing report
+            mock_settings.channels.MINOR_REVIEW = 999
 
-            # Mock no consent found
+            get_link_mock.return_value = 123
+            get_acct_mock.return_value = "test-account-uuid"
+            get_report_mock.return_value = None
             consent_mock.return_value = False
 
-            # Mock session for database operations
             mock_session = AsyncMock()
             session_mock.return_value.__aenter__.return_value = mock_session
 
-            # Mock message sent to review channel
             mock_message = helpers.MockMessage(id=12345)
-            ctx.bot.get_channel.return_value.send = AsyncMock(return_value=mock_message)
+            mock_channel = MagicMock()
+            mock_channel.send = AsyncMock(return_value=mock_message)
+            mock_channel.fetch_message = AsyncMock(return_value=mock_message)
+            ctx.guild.get_channel = MagicMock(return_value=mock_channel)
 
             cog = flag_minor.FlagMinorCog(bot)
             await cog.flag_minor.callback(
                 cog, ctx, user, 15, "User stated they are 15 in chat"
             )
 
-            # Assertions
-            # Command uses ctx.respond directly
             assert ctx.respond.called
-            # Verify command completed without error
 
     @pytest.mark.asyncio
     async def test_flag_minor_consent_already_exists(self, ctx, bot):
@@ -138,26 +134,21 @@ class TestFlagMinorCog:
         bot.get_member_or_user.return_value = user
 
         with (
-            patch('src.helpers.minor_verification.get_htb_user_id_for_discord', new_callable=AsyncMock) as get_link_mock,
-            patch('src.helpers.minor_verification.get_account_identifier_for_discord', new_callable=AsyncMock) as get_acct_mock,
-            patch('src.helpers.minor_verification.check_parental_consent', new_callable=AsyncMock) as consent_mock,
-            patch('src.helpers.minor_verification.get_active_minor_report', new_callable=AsyncMock) as get_report_mock,
-            patch('src.helpers.minor_verification.assign_minor_role', new_callable=AsyncMock) as assign_role_mock,
+            patch('src.cmds.core.flag_minor.get_htb_user_id_for_discord', new_callable=AsyncMock) as get_link_mock,
+            patch('src.cmds.core.flag_minor.get_account_identifier_for_discord', new_callable=AsyncMock) as get_acct_mock,
+            patch('src.cmds.core.flag_minor.check_parental_consent', new_callable=AsyncMock) as consent_mock,
+            patch('src.cmds.core.flag_minor.get_active_minor_report', new_callable=AsyncMock) as get_report_mock,
+            patch('src.cmds.core.flag_minor.assign_minor_role', new_callable=AsyncMock) as assign_role_mock,
             patch('src.cmds.core.flag_minor.settings') as mock_settings
         ):
-            # Mock settings roles
             mock_settings.roles.VERIFIED = 123
             mock_settings.roles.VERIFIED_MINOR = 456
-            
-            # Mock HTB account linked
+            mock_settings.channels.MINOR_REVIEW = 999
+
             get_link_mock.return_value = 123
             get_acct_mock.return_value = "test-account-uuid"
             get_report_mock.return_value = None
-
-            # Mock consent found
             consent_mock.return_value = True
-
-            # Mock role assignment
             assign_role_mock.return_value = True
 
             cog = flag_minor.FlagMinorCog(bot)
@@ -165,10 +156,7 @@ class TestFlagMinorCog:
                 cog, ctx, user, 15, "User stated they are 15 in chat"
             )
 
-            # Assertions
-            # Command uses ctx.respond directly
             assert ctx.respond.called
-            # Verify command completed without error
 
     @pytest.mark.asyncio
     async def test_flag_minor_existing_report(self, ctx, bot):
@@ -199,21 +187,18 @@ class TestFlagMinorCog:
         )
 
         with (
-            patch('src.helpers.minor_verification.get_htb_user_id_for_discord', new_callable=AsyncMock) as get_link_mock,
-            patch('src.helpers.minor_verification.get_account_identifier_for_discord', new_callable=AsyncMock) as get_acct_mock,
-            patch('src.helpers.minor_verification.check_parental_consent', new_callable=AsyncMock) as consent_mock,
-            patch('src.helpers.minor_verification.get_active_minor_report', new_callable=AsyncMock) as get_report_mock,
+            patch('src.cmds.core.flag_minor.get_htb_user_id_for_discord', new_callable=AsyncMock) as get_link_mock,
+            patch('src.cmds.core.flag_minor.get_account_identifier_for_discord', new_callable=AsyncMock) as get_acct_mock,
+            patch('src.cmds.core.flag_minor.check_parental_consent', new_callable=AsyncMock) as consent_mock,
+            patch('src.cmds.core.flag_minor.get_active_minor_report', new_callable=AsyncMock) as get_report_mock,
             patch('src.cmds.core.flag_minor.settings') as mock_settings
         ):
-            # Mock settings roles
             mock_settings.roles.VERIFIED = 123
             mock_settings.roles.VERIFIED_MINOR = 456
-            
-            # Mock no HTB account
+            mock_settings.channels.MINOR_REVIEW = 999
+
             get_link_mock.return_value = None
             get_acct_mock.return_value = None
-
-            # Mock existing report
             get_report_mock.return_value = existing_report
 
             cog = flag_minor.FlagMinorCog(bot)
@@ -221,10 +206,7 @@ class TestFlagMinorCog:
                 cog, ctx, user, 15, "User stated they are 15 in chat"
             )
 
-            # Assertions
-            # Command uses ctx.respond directly
             assert ctx.respond.called
-            # Verify command completed without error
 
     @pytest.mark.asyncio
     async def test_flag_minor_invalid_age(self, ctx, bot):
