@@ -343,6 +343,11 @@ class TestMinorReportView:
                 return_value=False,
             ),
             patch('src.views.minorreportview.AsyncSessionLocal', return_value=AsyncContextManager()),
+            patch(
+                'src.views.minorreportview.get_htb_user_id_for_discord',
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             await view._recheck_callback(interaction, mock_report)
 
