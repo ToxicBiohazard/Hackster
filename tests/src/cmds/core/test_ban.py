@@ -51,6 +51,18 @@ class TestBanCog:
             )
 
     @pytest.mark.asyncio
+    async def test_ban_user_not_found(self, ctx, bot):
+        ctx.user = helpers.MockMember(id=1, name="Test User")
+        user = helpers.MockMember(id=2, name="Banned User")
+        bot.get_member_or_user.return_value = None
+
+        cog = ban.BanCog(bot)
+        await cog.ban.callback(cog, ctx, user, "Any valid reason", "Some evidence")
+
+        ctx.defer.assert_awaited_once_with(ephemeral=False)
+        ctx.followup.send.assert_called_once_with(f"User {user} not found.")
+
+    @pytest.mark.asyncio
     async def test_tempban_success(self, ctx, bot):
         ctx.user = helpers.MockMember(id=1, name="Test User")
         user = helpers.MockMember(id=2, name="Banned User")
@@ -77,6 +89,18 @@ class TestBanCog:
             ctx.followup.send.assert_called_once_with(
                 f"Member {user.display_name} has been banned temporarily.", delete_after=0
             )
+
+    @pytest.mark.asyncio
+    async def test_tempban_user_not_found(self, ctx, bot):
+        ctx.user = helpers.MockMember(id=1, name="Test User")
+        user = helpers.MockMember(id=2, name="Banned User")
+        bot.get_member_or_user.return_value = None
+
+        cog = ban.BanCog(bot)
+        await cog.tempban.callback(cog, ctx, user, "5d", "Any valid reason", "Some evidence")
+
+        ctx.defer.assert_awaited_once_with(ephemeral=False)
+        ctx.followup.send.assert_called_once_with(f"User {user} not found.")
 
     @pytest.mark.asyncio
     async def test_tempban_failed_with_wrong_duration(self, ctx, bot, guild):

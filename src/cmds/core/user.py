@@ -79,8 +79,6 @@ class UserCog(commands.Cog):
         member = await self.bot.get_member_or_user(ctx.guild, user.id)
         if not isinstance(member, discord.Member):
             return await ctx.followup.send("User seems to have already left the server.")
-        if not member:
-            return await ctx.followup.send(f"User {user} not found.")
         if member_is_staff(member):
             return await ctx.followup.send("You cannot kick another staff member.")
         if member.bot:
