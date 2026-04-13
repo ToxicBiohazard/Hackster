@@ -35,7 +35,8 @@ class TestUserCog:
 
             # Assertions
             ctx.guild.kick.assert_called_once_with(user=user_to_kick, reason="Violation of rules")
-            ctx.respond.assert_called_once_with("User to Kick got the boot!")
+            ctx.defer.assert_awaited_once_with(ephemeral=False)
+            ctx.followup.send.assert_called_once_with("User to Kick got the boot!")
 
     @pytest.mark.asyncio
     async def test_kick_fail_user_left(self, ctx, guild, bot, session):
@@ -53,7 +54,8 @@ class TestUserCog:
             # Assertions
             bot.get_member_or_user.assert_called_once_with(ctx.guild, user_to_kick.id)
             ctx.guild.kick.assert_not_called()  # No kick should occur
-            ctx.respond.assert_called_once_with("User seems to have already left the server.")
+            ctx.defer.assert_awaited_once_with(ephemeral=False)
+            ctx.followup.send.assert_called_once_with("User seems to have already left the server.")
 
 
     @pytest.mark.asyncio

@@ -75,17 +75,18 @@ class UserCog(commands.Cog):
     async def kick(self, ctx: ApplicationContext, user: Member, reason: str, evidence: str = None) \
             -> Interaction | WebhookMessage:
         """Kick a user from the server."""
+        await ctx.defer(ephemeral=False)
         member = await self.bot.get_member_or_user(ctx.guild, user.id)
         if not isinstance(member, discord.Member):
-            return await ctx.respond("User seems to have already left the server.")
+            return await ctx.followup.send("User seems to have already left the server.")
         if not member:
-            return await ctx.respond(f"User {user} not found.")
+            return await ctx.followup.send(f"User {user} not found.")
         if member_is_staff(member):
-            return await ctx.respond("You cannot kick another staff member.")
+            return await ctx.followup.send("You cannot kick another staff member.")
         if member.bot:
-            return await ctx.respond("You cannot kick a bot.")
+            return await ctx.followup.send("You cannot kick a bot.")
         if ctx.user.id == member.id:
-            return await ctx.respond("You cannot kick yourself.")
+            return await ctx.followup.send("You cannot kick yourself.")
 
         if len(reason) == 0:
             reason = "No reason given..."
@@ -93,20 +94,20 @@ class UserCog(commands.Cog):
         try:
             await member.send(f"You have been kicked from {ctx.guild.name} for the following reason:\n>>> {reason}\n")
         except Forbidden as ex:
-            await ctx.respond(
+            await ctx.followup.send(
                 "Could not DM member due to privacy settings, however will still attempt to kick them..."
             )
             logger.warning(f"HTTPException when trying to unban user with ID {user.id}: {ex}")
         except HTTPException as ex:
             logger.warning(f"HTTPException when trying to unban user with ID {user.id}: {ex}")
-            return await ctx.respond(
+            return await ctx.followup.send(
                 "Here's a 400 Bad Request for you. Just like when you tried to ask me out, last week.",
             )
 
         await ctx.guild.kick(user=member, reason=reason)
         infraction_reason = f"Previously kicked for: {reason} - Evidence: {evidence}"
         await add_infraction(ctx.guild, member, 0, infraction_reason, ctx.user)
-        return await ctx.respond(f"{member.name} got the boot!")
+        return await ctx.followup.send(f"{member.name} got the boot!")
 
     def _match_role(self, role_name: str) -> Tuple[Union[int, None], Union[str, None]]:
         joinable = self.bot.role_manager.get_joinable_roles() if self.bot.role_manager else {}

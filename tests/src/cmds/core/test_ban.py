@@ -45,7 +45,8 @@ class TestBanCog:
             ban_member_mock.assert_called_once_with(
                 bot, ctx.guild, user, "500w", "Any valid reason", "Some evidence", ctx.user, needs_approval=False
             )
-            ctx.respond.assert_called_once_with(
+            ctx.defer.assert_awaited_once_with(ephemeral=False)
+            ctx.followup.send.assert_called_once_with(
                 f"Member {user.display_name} has been banned permanently.", delete_after=0
             )
 
@@ -72,7 +73,8 @@ class TestBanCog:
             ban_member_mock.assert_called_once_with(
                 bot, ctx.guild, user, "5d", "Any valid reason", "Some evidence", ctx.user, needs_approval=True
             )
-            ctx.respond.assert_called_once_with(
+            ctx.defer.assert_awaited_once_with(ephemeral=False)
+            ctx.followup.send.assert_called_once_with(
                 f"Member {user.display_name} has been banned temporarily.", delete_after=0
             )
 
@@ -102,7 +104,8 @@ class TestBanCog:
             ban_member_mock.assert_called_once_with(
                 bot, ctx.guild, user, "5", "Any valid reason", "Some evidence", ctx.user, needs_approval=True
             )
-            ctx.respond.assert_called_once_with(
+            ctx.defer.assert_awaited_once_with(ephemeral=False)
+            ctx.followup.send.assert_called_once_with(
                 "Malformed duration. Please use duration units, (e.g. 12h, 14d, 5w).", delete_after=15
             )
 
@@ -169,6 +172,11 @@ class TestBanCog:
 
             # Assertions
             add_infraction_mock.assert_called_once_with(ctx.guild, user, 0, "Any valid reason", ctx.user)
+            ctx.defer.assert_awaited_once_with(ephemeral=False)
+            ctx.followup.send.assert_called_once_with(
+                f"{user.mention} ({user.id}) has been warned with a strike weight of 0.",
+                delete_after=None,
+            )
 
     @pytest.mark.asyncio
     async def test_warn_user_not_found(self, ctx, bot):
@@ -180,7 +188,8 @@ class TestBanCog:
         await cog.warn.callback(cog, ctx, user, "Any valid reason")
 
         # Assertions
-        ctx.respond.assert_called_once_with(f"User {user} not found.")
+        ctx.defer.assert_awaited_once_with(ephemeral=False)
+        ctx.followup.send.assert_called_once_with(f"User {user} not found.")
 
     @pytest.mark.asyncio
     async def test_strike_success(self, ctx, bot):
@@ -198,6 +207,11 @@ class TestBanCog:
 
             # Assertions
             add_infraction_mock.assert_called_once_with(ctx.guild, user, 10, "Any valid reason", ctx.user)
+            ctx.defer.assert_awaited_once_with(ephemeral=False)
+            ctx.followup.send.assert_called_once_with(
+                f"{user.mention} ({user.id}) has been warned with a strike weight of 10.",
+                delete_after=None,
+            )
 
     @pytest.mark.asyncio
     async def test_strike_user_not_found(self, ctx, bot):
@@ -209,7 +223,8 @@ class TestBanCog:
         await cog.strike.callback(cog, ctx, user, 10, "Any valid reason")
 
         # Assertions
-        ctx.respond.assert_called_once_with(f"User {user} not found.")
+        ctx.defer.assert_awaited_once_with(ephemeral=False)
+        ctx.followup.send.assert_called_once_with(f"User {user} not found.")
 
     @pytest.mark.asyncio
     async def test_remove_infraction_success(self, ctx, bot):
