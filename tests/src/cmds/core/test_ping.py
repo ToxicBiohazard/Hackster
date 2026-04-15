@@ -9,9 +9,10 @@ class TestPing:
     """Test the `Ping` cog."""
 
     @pytest.mark.asyncio
-    async def test_ping(self, bot, ctx):
+    async def test_ping(self, bot, ctx, monkeypatch):
         """Test the response of the `ping` command."""
         bot.latency = 0.150  # Required by the command.
+        monkeypatch.setattr(ping.settings, "VERSION", "v-test")
         cog = ping.PingCog(bot)
 
         # Invoke the command.
@@ -25,6 +26,7 @@ class TestPing:
 
         # Colours' values should match.
         assert embed.colour.value == color_level(bot.latency)
+        assert "v-test" in embed.description
 
     def test_setup(self, bot):
         """Test the setup method of the cog."""

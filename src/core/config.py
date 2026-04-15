@@ -3,7 +3,6 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
-import toml
 from pydantic import BaseSettings, validator
 
 # AcademyCertificates is removed; cert mappings are now in the dynamic_role DB table.
@@ -205,18 +204,12 @@ class Global(BaseSettings):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    @validator("VERSION")
+    @validator("VERSION", pre=True, always=True)
     @classmethod
     def get_project_versions(cls, v: Optional[str], values: dict[str, Any]) -> str:
-        def _get_from_pyproject():
-            with open("pyproject.toml", "r") as f:
-                config = toml.load(f)
-                version = config.get("tool", {}).get("poetry", {}).get("version")
-                return version
-
-        if not v:
-            return values.get("VERSION", _get_from_pyproject())
-        return v
+        if v:
+            return v
+        return "unknown"
 
     @validator("guild_ids", "dev_guild_ids")
     def check_ids_format(cls, v: list[int]) -> list[int]:
