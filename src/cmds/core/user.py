@@ -77,6 +77,8 @@ class UserCog(commands.Cog):
         """Kick a user from the server."""
         await ctx.defer(ephemeral=False)
         member = await self.bot.get_member_or_user(ctx.guild, user.id)
+        if not member:
+            return await ctx.followup.send(f"User {user} not found.")
         if not isinstance(member, discord.Member):
             return await ctx.followup.send("User seems to have already left the server.")
         if member_is_staff(member):
