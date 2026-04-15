@@ -35,11 +35,11 @@ To set up and deploy the Discord bot, follow these steps:
    ```
    The requirements are:
     * [Python](https://www.python.org/)
-    * [Poetry](https://python-poetry.org/)
+    * [uv](https://docs.astral.sh/uv/)
 
 2. Install the dependencies
    ```shell
-   poetry install
+   uv sync --dev
    ```
 
 3. add the following environment variables.
@@ -56,13 +56,13 @@ To set up and deploy the Discord bot, follow these steps:
 4. Now you are done! You can run the project using
 
    ```shell
-   poetry run task start
+   uv run task start
    ```
 
    or test the project using
 
    ```shell
-   poetry run task test
+   uv run task test
    ```
 
 ## Contributing
@@ -101,7 +101,7 @@ Check [CONTRIBUTORS](CONTRIBUTORS) to see all project contributors.
 
 [docker compose]: https://docs.docker.com/compose/install/
 
-[poetry]: https://python-poetry.org/docs/
+[uv]: https://docs.astral.sh/uv/
 
 [python]: https://www.python.org/downloads/
 
