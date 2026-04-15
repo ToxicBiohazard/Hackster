@@ -43,10 +43,10 @@ Please ensure that the following is fulfilled:
 
 ## Before commits
 
-Install the project git hooks using [poetry]
+Install the project git hooks using [uv]
 
 ```shell
-poetry run task precommit
+uv run task precommit
 ```
 
 Now `pre-commit` will run automatically on `git commit`
@@ -67,11 +67,11 @@ Flake8...................................................................Passed
 Or you can run it manually
 
 ```shell
-poetry run task lint
+uv run task lint
 ```
 
 [flake8]: https://flake8.pycqa.org/en/latest/
 
 [pre-commit]: https://pre-commit.com/
 
-[poetry]: https://python-poetry.org/
+[uv]: https://docs.astral.sh/uv/

@@ -2,7 +2,7 @@
 
 if [ -f "/vault/secrets/.env" ]
 then
-  export $(grep -v '^#' /vault/secrets/.env | xargs)
+  export "$(grep -v '^#' /vault/secrets/.env | xargs)"
   ln -s /vault/secrets/.env .env
 fi
 
@@ -12,4 +12,4 @@ while ! mysqladmin ping --skip-ssl -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_
 done
 
 # Run migrations & start the bot
-alembic upgrade head && poetry run task start
+alembic upgrade head && exec uv run task start
