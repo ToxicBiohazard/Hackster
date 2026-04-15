@@ -1,9 +1,18 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from discord.errors import Forbidden, HTTPException
 
 from src.cmds.core import user
 from tests import helpers
+
+
+class MockResponse:
+    def __init__(self, status):
+        self.status = status
+        self.reason = "Forbidden"
+        self.code = status
+        self.text = "Cannot send messages to this user"
 
 
 class TestUserCog:
@@ -35,7 +44,8 @@ class TestUserCog:
 
             # Assertions
             ctx.guild.kick.assert_called_once_with(user=user_to_kick, reason="Violation of rules")
-            ctx.respond.assert_called_once_with("User to Kick got the boot!")
+            ctx.defer.assert_awaited_once_with(ephemeral=False)
+            ctx.followup.send.assert_called_once_with("User to Kick got the boot!")
 
     @pytest.mark.asyncio
     async def test_kick_fail_user_left(self, ctx, guild, bot, session):
@@ -43,17 +53,119 @@ class TestUserCog:
         user_to_kick = helpers.MockMember(id=2, name="User to Kick", bot=False)
         ctx.guild = guild
         ctx.guild.kick = AsyncMock()
-        bot.get_member_or_user = AsyncMock(return_value=None)
+        # Still on Discord but no longer in the guild: User, not Member (None means user not found at all).
+        left_user = helpers.MockUser(id=user_to_kick.id, name="User to Kick")
+        bot.get_member_or_user = AsyncMock(return_value=left_user)
 
-        # Ensure the member_is_staff mock doesn't block execution
         with patch('src.cmds.core.user.member_is_staff', return_value=False):
             cog = user.UserCog(bot)
             await cog.kick.callback(cog, ctx, user_to_kick, "Violation of rules")
 
-            # Assertions
             bot.get_member_or_user.assert_called_once_with(ctx.guild, user_to_kick.id)
-            ctx.guild.kick.assert_not_called()  # No kick should occur
-            ctx.respond.assert_called_once_with("User seems to have already left the server.")
+            ctx.guild.kick.assert_not_called()
+            ctx.defer.assert_awaited_once_with(ephemeral=False)
+            ctx.followup.send.assert_called_once_with("User seems to have already left the server.")
+
+    @pytest.mark.asyncio
+    async def test_kick_fail_user_not_found(self, ctx, guild, bot, session):
+        ctx.user = helpers.MockMember(id=1, name="Test Moderator")
+        user_to_kick = helpers.MockMember(id=2, name="User to Kick", bot=False)
+        ctx.guild = guild
+        ctx.guild.kick = AsyncMock()
+        bot.get_member_or_user = AsyncMock(return_value=None)
+
+        with patch('src.cmds.core.user.member_is_staff', return_value=False):
+            cog = user.UserCog(bot)
+            await cog.kick.callback(cog, ctx, user_to_kick, "Violation of rules")
+
+        bot.get_member_or_user.assert_called_once_with(ctx.guild, user_to_kick.id)
+        ctx.guild.kick.assert_not_called()
+        ctx.defer.assert_awaited_once_with(ephemeral=False)
+        ctx.followup.send.assert_called_once_with(f"User {user_to_kick} not found.")
+
+    @pytest.mark.asyncio
+    async def test_kick_fail_staff_member(self, ctx, guild, bot):
+        ctx.user = helpers.MockMember(id=1, name="Test Moderator")
+        member = helpers.MockMember(id=2, name="Staff Member", bot=False)
+        ctx.guild = guild
+        bot.get_member_or_user = AsyncMock(return_value=member)
+
+        with patch('src.cmds.core.user.member_is_staff', return_value=True):
+            cog = user.UserCog(bot)
+            await cog.kick.callback(cog, ctx, member, "Violation of rules")
+
+        ctx.defer.assert_awaited_once_with(ephemeral=False)
+        ctx.followup.send.assert_called_once_with("You cannot kick another staff member.")
+
+    @pytest.mark.asyncio
+    async def test_kick_fail_bot_member(self, ctx, guild, bot):
+        ctx.user = helpers.MockMember(id=1, name="Test Moderator")
+        member = helpers.MockMember(id=2, name="Bot User", bot=True)
+        ctx.guild = guild
+        bot.get_member_or_user = AsyncMock(return_value=member)
+
+        with patch('src.cmds.core.user.member_is_staff', return_value=False):
+            cog = user.UserCog(bot)
+            await cog.kick.callback(cog, ctx, member, "Violation of rules")
+
+        ctx.defer.assert_awaited_once_with(ephemeral=False)
+        ctx.followup.send.assert_called_once_with("You cannot kick a bot.")
+
+    @pytest.mark.asyncio
+    async def test_kick_fail_self_kick(self, ctx, guild, bot):
+        member = helpers.MockMember(id=1, name="Test Moderator", bot=False)
+        ctx.user = helpers.MockMember(id=1, name="Test Moderator")
+        ctx.guild = guild
+        bot.get_member_or_user = AsyncMock(return_value=member)
+
+        with patch('src.cmds.core.user.member_is_staff', return_value=False):
+            cog = user.UserCog(bot)
+            await cog.kick.callback(cog, ctx, member, "Violation of rules")
+
+        ctx.defer.assert_awaited_once_with(ephemeral=False)
+        ctx.followup.send.assert_called_once_with("You cannot kick yourself.")
+
+    @pytest.mark.asyncio
+    async def test_kick_http_exception_returns_error(self, ctx, guild, bot):
+        ctx.user = helpers.MockMember(id=1, name="Test Moderator")
+        member = helpers.MockMember(id=2, name="User to Kick", bot=False)
+        member.send = AsyncMock(side_effect=HTTPException(response=MockResponse(400), message="Bad request"))
+        ctx.guild = guild
+        ctx.guild.kick = AsyncMock()
+        bot.get_member_or_user = AsyncMock(return_value=member)
+
+        with (
+            patch('src.cmds.core.user.add_infraction', new_callable=AsyncMock),
+            patch('src.cmds.core.user.member_is_staff', return_value=False)
+        ):
+            cog = user.UserCog(bot)
+            await cog.kick.callback(cog, ctx, member, "Violation of rules")
+
+        ctx.defer.assert_awaited_once_with(ephemeral=False)
+        ctx.guild.kick.assert_not_called()
+        ctx.followup.send.assert_called_once_with(
+            "Here's a 400 Bad Request for you. Just like when you tried to ask me out, last week.",
+        )
+
+    @pytest.mark.asyncio
+    async def test_kick_forbidden_dm_sends_notice_and_continues(self, ctx, guild, bot):
+        ctx.user = helpers.MockMember(id=1, name="Test Moderator")
+        member = helpers.MockMember(id=2, name="User to Kick", bot=False)
+        member.send = AsyncMock(side_effect=Forbidden(response=MockResponse(403), message="Cannot DM"))
+        ctx.guild = guild
+        ctx.guild.kick = AsyncMock()
+        bot.get_member_or_user = AsyncMock(return_value=member)
+
+        with (
+            patch('src.cmds.core.user.add_infraction', new_callable=AsyncMock),
+            patch('src.cmds.core.user.member_is_staff', return_value=False)
+        ):
+            cog = user.UserCog(bot)
+            await cog.kick.callback(cog, ctx, member, "Violation of rules")
+
+        ctx.defer.assert_awaited_once_with(ephemeral=False)
+        assert ctx.followup.send.await_count == 2
+        ctx.guild.kick.assert_called_once_with(user=member, reason="Violation of rules")
 
 
     @pytest.mark.asyncio

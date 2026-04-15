@@ -496,7 +496,7 @@ class MockContext(CustomMockMixin, mock.MagicMock):
     """
     spec_set = context_instance
 
-    additional_spec_asyncs = ("respond",)
+    additional_spec_asyncs = ("respond", "defer")
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -507,6 +507,8 @@ class MockContext(CustomMockMixin, mock.MagicMock):
         self.channel = kwargs.get('channel', MockTextChannel())
         self.message = kwargs.get('message', MockMessage())
         self.respond = mock.AsyncMock()
+        self.followup = mock.MagicMock()
+        self.followup.send = mock.AsyncMock()
 
 
 dummy_attachment = {
