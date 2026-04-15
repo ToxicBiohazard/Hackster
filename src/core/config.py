@@ -1,7 +1,7 @@
 import os
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseSettings, validator
 
@@ -197,26 +197,27 @@ class Global(BaseSettings):
 
     ROOT: Path = None
 
-    VERSION: str | None = None
+    VERSION: str = "unknown"
 
     SEASON_ID: int = 0
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    @validator("VERSION", pre=True, always=True)
-    @classmethod
-    def get_project_versions(cls, v: Optional[str], values: dict[str, Any]) -> str:
-        if v:
-            return v
-        return "unknown"
+    @validator("guild_ids", "dev_guild_ids", pre=True, each_item=True)
+    def check_ids_format(cls, v: int | str) -> int:
+        """Validate Discord snowflakes and accept string-form IDs from env sources."""
+        if isinstance(v, int):
+            discord_id = v
+        elif isinstance(v, str) and v.isdigit():
+            discord_id = int(v)
+        else:
+            raise ValueError("Discord IDs must be base-10 integer snowflakes.")
 
-    @validator("guild_ids", "dev_guild_ids")
-    def check_ids_format(cls, v: list[int]) -> list[int]:
-        """Validate discord ids format."""
-        for discord_id in v:
-            assert len(str(discord_id)) > 17, "Discord ids must have a length of 19."
-        return v
+        if not 0 < discord_id < 2**64:
+            raise ValueError("Discord IDs must be positive unsigned 64-bit snowflakes.")
+
+        return discord_id
 
     # Helper methods (get_post_or_rank, get_season, get_cert, get_academy_cert_role)
     # have been moved to RoleManager (src/services/role_manager.py).

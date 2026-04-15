@@ -1,9 +1,29 @@
 import unittest
 
+from pydantic import ValidationError
+
+from src.core.config import Global
 from src.core import settings
 
 
 class TestConfig(unittest.TestCase):
+    def test_guild_ids_accept_string_snowflakes(self):
+        """Test that guild IDs can be provided as digit strings and are coerced to ints."""
+        config = Global(HTB_API_KEY="test", guild_ids=["6455184161011276950"], dev_guild_ids=["7764771731239076051"])
+        self.assertEqual(config.guild_ids, [6455184161011276950])
+        self.assertEqual(config.dev_guild_ids, [7764771731239076051])
+
+    def test_guild_ids_reject_non_snowflakes(self):
+        """Test that guild IDs must be positive base-10 unsigned 64-bit snowflakes."""
+        with self.assertRaises(ValidationError):
+            Global(HTB_API_KEY="test", guild_ids=["not-a-snowflake"])
+
+        with self.assertRaises(ValidationError):
+            Global(HTB_API_KEY="test", guild_ids=[0])
+
+        with self.assertRaises(ValidationError):
+            Global(HTB_API_KEY="test", guild_ids=[2**64])
+
     def test_core_roles_required(self):
         """Test that core roles are still loaded from env vars."""
         self.assertIsNotNone(settings.roles.VERIFIED)
