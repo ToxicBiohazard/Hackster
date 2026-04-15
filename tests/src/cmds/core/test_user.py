@@ -53,18 +53,35 @@ class TestUserCog:
         user_to_kick = helpers.MockMember(id=2, name="User to Kick", bot=False)
         ctx.guild = guild
         ctx.guild.kick = AsyncMock()
-        bot.get_member_or_user = AsyncMock(return_value=None)
+        # Still on Discord but no longer in the guild: User, not Member (None means user not found at all).
+        left_user = helpers.MockUser(id=user_to_kick.id, name="User to Kick")
+        bot.get_member_or_user = AsyncMock(return_value=left_user)
 
-        # Ensure the member_is_staff mock doesn't block execution
         with patch('src.cmds.core.user.member_is_staff', return_value=False):
             cog = user.UserCog(bot)
             await cog.kick.callback(cog, ctx, user_to_kick, "Violation of rules")
 
-            # Assertions
             bot.get_member_or_user.assert_called_once_with(ctx.guild, user_to_kick.id)
-            ctx.guild.kick.assert_not_called()  # No kick should occur
+            ctx.guild.kick.assert_not_called()
             ctx.defer.assert_awaited_once_with(ephemeral=False)
             ctx.followup.send.assert_called_once_with("User seems to have already left the server.")
+
+    @pytest.mark.asyncio
+    async def test_kick_fail_user_not_found(self, ctx, guild, bot, session):
+        ctx.user = helpers.MockMember(id=1, name="Test Moderator")
+        user_to_kick = helpers.MockMember(id=2, name="User to Kick", bot=False)
+        ctx.guild = guild
+        ctx.guild.kick = AsyncMock()
+        bot.get_member_or_user = AsyncMock(return_value=None)
+
+        with patch('src.cmds.core.user.member_is_staff', return_value=False):
+            cog = user.UserCog(bot)
+            await cog.kick.callback(cog, ctx, user_to_kick, "Violation of rules")
+
+        bot.get_member_or_user.assert_called_once_with(ctx.guild, user_to_kick.id)
+        ctx.guild.kick.assert_not_called()
+        ctx.defer.assert_awaited_once_with(ephemeral=False)
+        ctx.followup.send.assert_called_once_with(f"User {user_to_kick} not found.")
 
     @pytest.mark.asyncio
     async def test_kick_fail_staff_member(self, ctx, guild, bot):
