@@ -1,14 +1,42 @@
-FROM ghcr.io/hackthebox/hackster:base as builder-base
-# `production` image used for runtime
-FROM builder-base as production
+ARG PYTHON_VERSION=3.13
 
-RUN apt-get update && \
-    apt-get install -y mariadb-client libmariadb-dev && \
-    rm -rf /var/lib/apt/lists/*
+FROM astral/uv:python${PYTHON_VERSION}-bookworm-slim AS builder
 
-COPY --from=builder-base $APP_PATH $APP_PATH
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+ENV APP_PATH="/opt/hackster"
+ENV VENV_PATH="$APP_PATH/.venv"
+ENV PATH="$VENV_PATH/bin:$PATH"
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y \
+    build-essential \
+    libmariadb-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR $APP_PATH
+COPY ./uv.lock ./pyproject.toml ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+FROM astral/uv:python${PYTHON_VERSION}-bookworm-slim AS runtime
+
+ARG VERSION=unknown
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+ENV APP_PATH="/opt/hackster"
+ENV VENV_PATH="$APP_PATH/.venv"
+ENV PATH="$VENV_PATH/bin:$PATH"
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y \
+    mariadb-client \
+    libmariadb3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR $APP_PATH
+
+COPY --from=builder $VENV_PATH $VENV_PATH
 
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini
@@ -19,6 +47,7 @@ COPY pyproject.toml ./pyproject.toml
 RUN chmod +x startup.sh
 
 ENV PYTHONPATH=$APP_PATH
+ENV VERSION=$VERSION
 
 EXPOSE 1337
 # Run the start script, it will check for an /app/prestart.sh script (e.g. for migrations)

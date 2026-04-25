@@ -21,6 +21,16 @@ from src.helpers.checks import member_is_staff
 logger = logging.getLogger(__name__)
 
 
+async def joinable_role_autocomplete(ctx: discord.AutocompleteContext):
+    """Autocomplete for joinable roles, fetched from DB via role manager."""
+    role_manager = ctx.bot.role_manager
+    if not role_manager:
+        return []
+    joinable = role_manager.get_joinable_roles()
+    current = (ctx.value or "").lower()
+    return [name for name in joinable.keys() if current in name.lower()][:25]
+
+
 class UserCog(commands.Cog):
     """Ban related commands."""
 
@@ -65,17 +75,18 @@ class UserCog(commands.Cog):
     async def kick(self, ctx: ApplicationContext, user: Member, reason: str, evidence: str = None) \
             -> Interaction | WebhookMessage:
         """Kick a user from the server."""
+        await ctx.defer(ephemeral=False)
         member = await self.bot.get_member_or_user(ctx.guild, user.id)
-        if not isinstance(member, discord.Member):
-            return await ctx.respond("User seems to have already left the server.")
         if not member:
-            return await ctx.respond(f"User {user} not found.")
+            return await ctx.followup.send(f"User {user} not found.")
+        if not isinstance(member, discord.Member):
+            return await ctx.followup.send("User seems to have already left the server.")
         if member_is_staff(member):
-            return await ctx.respond("You cannot kick another staff member.")
+            return await ctx.followup.send("You cannot kick another staff member.")
         if member.bot:
-            return await ctx.respond("You cannot kick a bot.")
+            return await ctx.followup.send("You cannot kick a bot.")
         if ctx.user.id == member.id:
-            return await ctx.respond("You cannot kick yourself.")
+            return await ctx.followup.send("You cannot kick yourself.")
 
         if len(reason) == 0:
             reason = "No reason given..."
@@ -83,25 +94,25 @@ class UserCog(commands.Cog):
         try:
             await member.send(f"You have been kicked from {ctx.guild.name} for the following reason:\n>>> {reason}\n")
         except Forbidden as ex:
-            await ctx.respond(
+            await ctx.followup.send(
                 "Could not DM member due to privacy settings, however will still attempt to kick them..."
             )
             logger.warning(f"HTTPException when trying to unban user with ID {user.id}: {ex}")
         except HTTPException as ex:
             logger.warning(f"HTTPException when trying to unban user with ID {user.id}: {ex}")
-            return await ctx.respond(
+            return await ctx.followup.send(
                 "Here's a 400 Bad Request for you. Just like when you tried to ask me out, last week.",
             )
 
         await ctx.guild.kick(user=member, reason=reason)
         infraction_reason = f"Previously kicked for: {reason} - Evidence: {evidence}"
         await add_infraction(ctx.guild, member, 0, infraction_reason, ctx.user)
-        return await ctx.respond(f"{member.name} got the boot!")
+        return await ctx.followup.send(f"{member.name} got the boot!")
 
-    @staticmethod
-    def _match_role(role_name: str) -> Tuple[Union[int, None], Union[str, None]]:
-        role_name = role_name.lower()
-        matches = [v[0] for k, v in settings.roles_to_join.items() if role_name in k.lower()]
+    def _match_role(self, role_name: str) -> Tuple[Union[int, None], Union[str, None]]:
+        joinable = self.bot.role_manager.get_joinable_roles() if self.bot.role_manager else {}
+        role_name_lower = role_name.lower()
+        matches = [v[0] for k, v in joinable.items() if role_name_lower in k.lower()]
         if not matches:
             return None, "I don't know what role that is. Did you spell it right?"
         if len(matches) > 1:
@@ -117,15 +128,16 @@ class UserCog(commands.Cog):
     async def join(
         self,
         ctx: ApplicationContext,
-        role_name: Option(str, "Choose the role!", choices=settings.roles_to_join.keys()),
+        role_name: Option(str, "Choose the role!", autocomplete=joinable_role_autocomplete),
     ) -> Interaction | WebhookMessage:
         """Join a vanity role if such is specified, otherwise list the vanity roles available to join."""
         # No role or empty role name passed
         if not role_name or role_name.isspace():
+            joinable = self.bot.role_manager.get_joinable_roles() if self.bot.role_manager else {}
             embed = discord.Embed(title=" ", color=0x3D85C6)
             embed.set_author(name="Join-able Roles")
             embed.set_footer(text="Use the command /join <role> to join a role.")
-            for role, value in settings.roles_to_join.items():
+            for role, value in joinable.items():
                 embed.add_field(name=role, value=value[1], inline=True)
             return await ctx.respond(embed=embed)
 
@@ -143,7 +155,7 @@ class UserCog(commands.Cog):
     async def leave(
         self,
         ctx: ApplicationContext,
-        role_name: Option(str, "Choose the role!", choices=settings.roles_to_join.keys()),
+        role_name: Option(str, "Choose the role!", autocomplete=joinable_role_autocomplete),
     ) -> Interaction | WebhookMessage:
         """Removes the vanity role from your user."""
         role_id, exc = self._match_role(role_name)

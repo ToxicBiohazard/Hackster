@@ -30,7 +30,10 @@ class BanCodes(Enum):
 
 
 async def _check_member(
-    bot: Bot, guild: Guild, member: Member | User, author: Member | ClientUser | None = None
+    bot: Bot,
+    guild: Guild,
+    member: Member | User,
+    author: Member | ClientUser | None = None,
 ) -> SimpleResponse | None:
     if isinstance(member, Member):
         if member_is_staff(member):
@@ -61,7 +64,9 @@ async def get_ban(member: Member | User) -> Ban | None:
 
 
 async def update_ban(ban: Ban) -> None:
-    logger.info(f"Updating ban {ban.id} for user {ban.user_id} with expiration {ban.unban_time}")
+    logger.info(
+        f"Updating ban {ban.id} for user {ban.user_id} with expiration {ban.unban_time}"
+    )
     async with AsyncSessionLocal() as session:
         session.add(ban)
         await session.commit()
@@ -173,12 +178,26 @@ async def handle_platform_ban_or_update(
     if not existing_ban:
         # No existing ban, create new one
         await ban_member_with_epoch(
-            bot, guild, member, expires_timestamp, reason, evidence, needs_approval=False
+            bot,
+            guild,
+            member,
+            expires_timestamp,
+            reason,
+            evidence,
+            needs_approval=False,
         )
         await _send_ban_notice(
-            guild, member, reason, author_name, expires_at_str, guild.get_channel(log_channel_id)  # type: ignore
+            guild,
+            member,
+            reason,
+            author_name,
+            expires_at_str,
+            guild.get_channel(log_channel_id),  # type: ignore
         )
-        logger.info(f"Created new platform ban for user {member.id} until {expires_at_str}", extra=extra_log_data)
+        logger.info(
+            f"Created new platform ban for user {member.id} until {expires_at_str}",
+            extra=extra_log_data,
+        )
         return {"action": "created"}
 
     # Existing ban found - determine what to do based on ban type and timing
@@ -217,11 +236,17 @@ async def handle_platform_ban_or_update(
             existing_ban.unban_time = expires_timestamp
             existing_ban.reason = f"Platform Ban: {reason}"  # Update reason to indicate platform authority
             await update_ban(existing_ban)
-            logger.info(f"Updated existing ban for user {member.id} until {expires_at_str}.", extra=extra_log_data)
+            logger.info(
+                f"Updated existing ban for user {member.id} until {expires_at_str}.",
+                extra=extra_log_data,
+            )
             return {"action": "updated"}
 
     # Default case (shouldn't reach here, but for safety)
-    logger.warning(f"Unexpected case in platform ban handling for user {member.id}", extra=extra_log_data)
+    logger.warning(
+        f"Unexpected case in platform ban handling for user {member.id}",
+        extra=extra_log_data,
+    )
     return {"action": "no_action"}
 
 
@@ -264,8 +289,7 @@ async def ban_member_with_epoch(
     current_time = datetime.now(tz=timezone.utc).timestamp()
     if unban_epoch_time <= current_time:
         return SimpleResponse(
-            message="Unban time must be in the future",
-            delete_after=15
+            message="Unban time must be in the future", delete_after=15
         )
 
     end_date: str = datetime.fromtimestamp(unban_epoch_time, tz=timezone.utc).strftime(
@@ -365,7 +389,7 @@ async def ban_member_with_epoch(
             f"Evidence: {evidence}",
         )
         embed.set_thumbnail(url=f"{settings.HTB_URL}/images/logo600.png")
-        view = BanDecisionView(ban_id, bot, guild, member, end_date, reason)
+        view = BanDecisionView(ban_id, bot)
         await guild.get_channel(settings.channels.SR_MOD).send(embed=embed, view=view)  # type: ignore
 
     return await _create_ban_response(
