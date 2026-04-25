@@ -329,6 +329,7 @@ async def ban_member_with_epoch(
             message=f"A ban with id: {ban_id} already exists for member {member}",
             delete_after=None,
             code=BanCodes.ALREADY_EXISTS,
+            ban_id=ban_id,
         )
 
     # DM member, before we ban, else we cannot dm since we do not share a guild

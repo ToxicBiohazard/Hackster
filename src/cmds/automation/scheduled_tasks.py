@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
+from dateutil.relativedelta import relativedelta
 from discord import Member
 from discord.ext import commands, tasks
 from sqlalchemy import select
@@ -129,7 +130,7 @@ class ScheduledTasks(commands.Cog):
                 if created_at.tzinfo is None:
                     created_at = created_at.replace(tzinfo=timezone.utc)
                 years = years_until_18(report.suspected_age)
-                expires_at = created_at.replace(year=created_at.year + years)
+                expires_at = created_at + relativedelta(years=years)
                 if now < expires_at:
                     continue
 
@@ -174,7 +175,7 @@ class ScheduledTasks(commands.Cog):
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=timezone.utc)
         years = years_until_18(report.suspected_age)
-        expires_at = created_at.replace(year=created_at.year + years)
+        expires_at = created_at + relativedelta(years=years)
         if now >= expires_at:
             return
 
