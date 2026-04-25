@@ -1,9 +1,6 @@
 """Helpers for minor flagging and parental consent verification."""
 
 import asyncio
-import hashlib
-import hmac
-import json
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -29,67 +26,59 @@ DENIED = "denied"
 CONSENT_VERIFIED = "consent_verified"
 
 
-async def check_parental_consent(account_identifier: str) -> bool:
+async def check_parental_consent(discord_user_id: int) -> bool:
     """
-    Check if parental consent form exists via Cloud Function.
+    Check if parental consent exists for a Discord user via the Nexus API.
 
-    POST to PARENTAL_CONSENT_CHECK_URL with file_name set to the user's SSO UUID.
-    Returns True iff the function responds with HTTP 200 and a JSON body
-    containing {"exist": true}. Any other response is treated as no consent.
+    POST to NEXUS_API_BASE_URL/discord/user_lookup/parental_consent_exists with
+    {"discord_id": "<snowflake>"} and a Bearer token. Returns True iff the
+    response body contains {"exists": true}. Any error is treated as no consent.
     """
-    if not account_identifier:
+    base_url = settings.NEXUS_API_BASE_URL or ""
+    if not base_url:
+        logger.warning("NEXUS_API_BASE_URL not set; consent check skipped.")
         return False
 
-    url = getattr(settings, "PARENTAL_CONSENT_CHECK_URL", None) or ""
-    if not url:
-        logger.warning("PARENTAL_CONSENT_CHECK_URL not set; consent check skipped.")
+    token = settings.NEXUS_API_TOKEN or ""
+    if not token:
+        logger.warning("NEXUS_API_TOKEN not set; consent check skipped.")
         return False
 
-    secret = getattr(settings, "PARENTAL_CONSENT_SECRET", None) or ""
-    if not secret:
-        logger.warning("PARENTAL_CONSENT_SECRET not set; consent check skipped.")
-        return False
-
-    payload = {"file_name": account_identifier}
-    body_bytes = json.dumps(payload).encode("utf-8")
-    signature = hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha1).hexdigest()
+    endpoint = f"{base_url.rstrip('/')}/discord/user_lookup/parental_consent_exists"
+    payload = {"discord_id": str(discord_user_id)}
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url,
-                data=body_bytes,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Signature": signature,
-                },
+        async with aiohttp.ClientSession() as http:
+            async with http.post(
+                endpoint,
+                json=payload,
+                headers={"Authorization": f"Bearer {token}"},
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 body = await resp.text()
                 logger.info(
-                    "Parental consent check response for %s: status=%s body=%s",
-                    account_identifier,
+                    "Nexus consent check for discord_id=%s: status=%s body=%s",
+                    discord_user_id,
                     resp.status,
                     body,
                 )
                 if resp.status != 200:
                     return False
-
                 try:
+                    import json
                     data = json.loads(body)
-                except json.JSONDecodeError:
+                except (ValueError, TypeError):
                     logger.warning(
-                        "Parental consent check returned non-JSON body for %s",
-                        account_identifier,
+                        "Nexus consent check returned non-JSON body for discord_id=%s",
+                        discord_user_id,
                     )
                     return False
-
-                return bool(data.get("exist"))
+                return bool(data.get("exists"))
     except aiohttp.ClientError as e:
-        logger.warning("Parental consent check request failed: %s", e)
+        logger.warning("Nexus consent check request failed: %s", e)
         return False
     except asyncio.TimeoutError as e:
-        logger.warning("Parental consent check timed out: %s", e)
+        logger.warning("Nexus consent check timed out: %s", e)
         return False
 
 
@@ -107,19 +96,6 @@ async def assign_minor_role(member: Member, guild: Guild) -> bool:
     except (Forbidden, HTTPException) as e:
         logger.warning("Failed to assign minor role to %s: %s", member.id, e)
         return False
-
-
-async def get_account_identifier_for_discord(discord_user_id: int) -> str | None:
-    """Get HTB account identifier (SSO UUID) for a Discord user from HtbDiscordLink."""
-    async with AsyncSessionLocal() as session:
-        stmt = select(HtbDiscordLink).filter(
-            HtbDiscordLink.discord_user_id == discord_user_id
-        ).limit(1)
-        result = await session.scalars(stmt)
-        link = result.first()
-        if link:
-            return link.account_identifier
-        return None
 
 
 async def get_htb_user_id_for_discord(discord_user_id: int) -> int | None:

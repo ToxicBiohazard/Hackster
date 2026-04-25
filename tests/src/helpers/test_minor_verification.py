@@ -1,11 +1,8 @@
-import hashlib
-import hmac
-import json
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from aiohttp import ClientSession, ClientTimeout
+from aiohttp import ClientSession
 
 from src.helpers.minor_verification import (
     APPROVED,
@@ -15,7 +12,6 @@ from src.helpers.minor_verification import (
     assign_minor_role,
     calculate_ban_duration,
     check_parental_consent,
-    get_account_identifier_for_discord,
     get_active_minor_report,
     get_htb_user_id_for_discord,
     get_minor_review_reviewer_ids,
@@ -97,84 +93,85 @@ class TestMinorVerificationHelpers:
 
     @pytest.mark.asyncio
     async def test_check_parental_consent_exists(self):
-        """Test successful parental consent check when consent exists."""
-        account_id = "test-account-123"
+        """Test successful consent check via Nexus when consent exists."""
+        discord_id = 123456789012345678
 
         mock_response = MockResponse(
             status=200,
-            text_data='{"exist": true}',  # JSON string, not empty
-            json_data={"exist": True}
+            text_data='{"exists": true}',
+            json_data={"exists": True},
         )
 
         with (
-            patch('src.helpers.minor_verification.settings') as mock_settings,
-            patch.object(ClientSession, 'post', return_value=mock_response)
+            patch("src.helpers.minor_verification.settings") as mock_settings,
+            patch.object(ClientSession, "post", return_value=mock_response),
         ):
-            mock_settings.PARENTAL_CONSENT_CHECK_URL = "http://example.com/check"
-            mock_settings.PARENTAL_CONSENT_SECRET = "test_secret"
+            mock_settings.NEXUS_API_BASE_URL = "https://nexus.example.com/secret"
+            mock_settings.NEXUS_API_TOKEN = "test_token"
 
-            result = await check_parental_consent(account_id)
+            result = await check_parental_consent(discord_id)
 
         assert result is True
 
     @pytest.mark.asyncio
     async def test_check_parental_consent_not_exists(self):
-        """Test parental consent check when consent doesn't exist."""
-        account_id = "test-account-123"
+        """Test Nexus consent check when consent doesn't exist."""
+        discord_id = 123456789012345678
 
         mock_response = MockResponse(
             status=200,
-            json_data={"exist": False}
+            text_data='{"exists": false}',
+            json_data={"exists": False},
         )
 
         with (
-            patch('src.helpers.minor_verification.settings') as mock_settings,
-            patch.object(ClientSession, 'post', return_value=mock_response)
+            patch("src.helpers.minor_verification.settings") as mock_settings,
+            patch.object(ClientSession, "post", return_value=mock_response),
         ):
-            mock_settings.PARENTAL_CONSENT_CHECK_URL = "http://example.com/check"
-            mock_settings.PARENTAL_CONSENT_SECRET = "test_secret"
+            mock_settings.NEXUS_API_BASE_URL = "https://nexus.example.com/secret"
+            mock_settings.NEXUS_API_TOKEN = "test_token"
 
-            result = await check_parental_consent(account_id)
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_check_parental_consent_missing_config(self):
-        """Test consent check with missing configuration."""
-        account_id = "test-account-123"
-
-        with patch('src.helpers.minor_verification.settings') as mock_settings:
-            mock_settings.PARENTAL_CONSENT_CHECK_URL = None
-            mock_settings.PARENTAL_CONSENT_SECRET = "test_secret"
-
-            result = await check_parental_consent(account_id)
+            result = await check_parental_consent(discord_id)
 
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_check_parental_consent_empty_identifier(self):
-        """Test consent check with empty account identifier."""
-        result = await check_parental_consent("")
+    async def test_check_parental_consent_missing_url(self):
+        """Test consent check returns False when NEXUS_API_BASE_URL is not set."""
+        with patch("src.helpers.minor_verification.settings") as mock_settings:
+            mock_settings.NEXUS_API_BASE_URL = None
+            mock_settings.NEXUS_API_TOKEN = "test_token"
+
+            result = await check_parental_consent(123456789012345678)
+
         assert result is False
 
-        result = await check_parental_consent(None)
+    @pytest.mark.asyncio
+    async def test_check_parental_consent_missing_token(self):
+        """Test consent check returns False when NEXUS_API_TOKEN is not set."""
+        with patch("src.helpers.minor_verification.settings") as mock_settings:
+            mock_settings.NEXUS_API_BASE_URL = "https://nexus.example.com/secret"
+            mock_settings.NEXUS_API_TOKEN = None
+
+            result = await check_parental_consent(123456789012345678)
+
         assert result is False
 
     @pytest.mark.asyncio
     async def test_check_parental_consent_http_error(self):
-        """Test consent check with HTTP error."""
-        account_id = "test-account-123"
+        """Test consent check returns False on non-200 HTTP response."""
+        discord_id = 123456789012345678
 
         mock_response = MockResponse(status=500, text_data="Internal Server Error")
 
         with (
-            patch('src.helpers.minor_verification.settings') as mock_settings,
-            patch.object(ClientSession, 'post', return_value=mock_response)
+            patch("src.helpers.minor_verification.settings") as mock_settings,
+            patch.object(ClientSession, "post", return_value=mock_response),
         ):
-            mock_settings.PARENTAL_CONSENT_CHECK_URL = "http://example.com/check"
-            mock_settings.PARENTAL_CONSENT_SECRET = "test_secret"
+            mock_settings.NEXUS_API_BASE_URL = "https://nexus.example.com/secret"
+            mock_settings.NEXUS_API_TOKEN = "test_token"
 
-            result = await check_parental_consent(account_id)
+            result = await check_parental_consent(discord_id)
 
         assert result is False
 

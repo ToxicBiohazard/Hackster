@@ -22,7 +22,6 @@ from src.helpers.minor_verification import (
     PENDING,
     assign_minor_role,
     check_parental_consent,
-    get_account_identifier_for_discord,
     get_htb_user_id_for_discord,
     is_minor_review_moderator,
     years_until_18,
@@ -360,14 +359,7 @@ class MinorReportView(View):
 
     async def _recheck_callback(self, interaction: Interaction, report: MinorReport) -> None:
         await interaction.response.defer(ephemeral=True)
-        account_id = await get_account_identifier_for_discord(report.user_id)
-        if not account_id:
-            await interaction.followup.send(
-                "Could not find linked account for this user.",
-                ephemeral=True,
-            )
-            return
-        has_consent = await check_parental_consent(account_id)
+        has_consent = await check_parental_consent(report.user_id)
         guild = interaction.guild
         if not guild:
             await interaction.followup.send("Guild not found.", ephemeral=True)

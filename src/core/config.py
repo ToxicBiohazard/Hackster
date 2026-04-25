@@ -195,6 +195,9 @@ class Global(BaseSettings):
     SLACK_FEEDBACK_WEBHOOK: str = ""
     JIRA_WEBHOOK: str = ""
 
+    NEXUS_API_BASE_URL: str | None = None
+    NEXUS_API_TOKEN: str | None = None
+
     ROOT: Path = None
 
     VERSION: str = "unknown"

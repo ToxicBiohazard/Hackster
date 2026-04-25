@@ -261,40 +261,8 @@ class TestMinorReportView:
         interaction.response.send_message.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_recheck_callback_no_account(self, bot):
-        """Test _recheck_callback when user has no linked account."""
-        view = MinorReportView(bot)
-        mock_report = MinorReport(
-            id=1,
-            user_id=999,
-            reporter_id=2,
-            suspected_age=15,
-            evidence="Evidence",
-            report_message_id=12345,
-            status="approved",
-        )
-        interaction = AsyncMock(spec=Interaction)
-        interaction.response = AsyncMock()
-        interaction.response.defer = AsyncMock()
-        interaction.followup = AsyncMock()
-        interaction.followup.send = AsyncMock()
-        interaction.message = helpers.MockMessage(id=12345)
-        interaction.guild = helpers.MockGuild()
-
-        with patch(
-            'src.views.minorreportview.get_account_identifier_for_discord',
-            new_callable=AsyncMock,
-            return_value=None,
-        ):
-            await view._recheck_callback(interaction, mock_report)
-
-        interaction.response.defer.assert_called_once_with(ephemeral=True)
-        interaction.followup.send.assert_called_once()
-        assert "linked account" in interaction.followup.send.call_args[0][0].lower()
-
-    @pytest.mark.asyncio
     async def test_recheck_callback_consent_not_found(self, bot):
-        """Test _recheck_callback when consent is not found."""
+        """Test _recheck_callback when Nexus reports no consent — status unchanged."""
         view = MinorReportView(bot)
         now = datetime.now(timezone.utc)
         mock_report = MinorReport(
@@ -333,18 +301,13 @@ class TestMinorReportView:
 
         with (
             patch(
-                'src.views.minorreportview.get_account_identifier_for_discord',
-                new_callable=AsyncMock,
-                return_value="uuid-123",
-            ),
-            patch(
-                'src.views.minorreportview.check_parental_consent',
+                "src.views.minorreportview.check_parental_consent",
                 new_callable=AsyncMock,
                 return_value=False,
             ),
-            patch('src.views.minorreportview.AsyncSessionLocal', return_value=AsyncContextManager()),
+            patch("src.views.minorreportview.AsyncSessionLocal", return_value=AsyncContextManager()),
             patch(
-                'src.views.minorreportview.get_htb_user_id_for_discord',
+                "src.views.minorreportview.get_htb_user_id_for_discord",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -356,7 +319,7 @@ class TestMinorReportView:
 
     @pytest.mark.asyncio
     async def test_recheck_callback_consent_found_no_ban(self, bot):
-        """Test _recheck_callback when consent is found and user was not banned by this report."""
+        """Test _recheck_callback when Nexus confirms consent and user was not banned by this report."""
         view = MinorReportView(bot)
         now = datetime.now(timezone.utc)
         mock_report = MinorReport(
@@ -384,7 +347,6 @@ class TestMinorReportView:
         interaction.user = helpers.MockMember(id=1, name="Mod")
         bot.get_member_or_user = AsyncMock(return_value=mock_member)
 
-        # session.get returns a report-like object for build_minor_report_embed
         mock_session = MagicMock()
         mock_session.get = AsyncMock(return_value=mock_report)
         mock_session.commit = AsyncMock()
@@ -398,31 +360,26 @@ class TestMinorReportView:
 
         with (
             patch(
-                'src.views.minorreportview.get_account_identifier_for_discord',
-                new_callable=AsyncMock,
-                return_value="uuid-123",
-            ),
-            patch(
-                'src.views.minorreportview.check_parental_consent',
+                "src.views.minorreportview.check_parental_consent",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                'src.views.minorreportview.assign_minor_role',
+                "src.views.minorreportview.assign_minor_role",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                'src.views.minorreportview.get_ban',
+                "src.views.minorreportview.get_ban",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
+            patch("src.views.minorreportview.AsyncSessionLocal", return_value=AsyncContextManager()),
             patch(
-                'src.views.minorreportview.update_report_status',
+                "src.views.minorreportview.get_htb_user_id_for_discord",
                 new_callable=AsyncMock,
+                return_value=None,
             ),
-            patch('src.views.minorreportview.AsyncSessionLocal', return_value=AsyncContextManager()),
-            patch('src.views.minorreportview.get_htb_user_id_for_discord', new_callable=AsyncMock, return_value=None),
         ):
             await view._recheck_callback(interaction, mock_report)
 

@@ -15,7 +15,6 @@ from src.helpers.minor_verification import (
     PENDING,
     assign_minor_role,
     check_parental_consent,
-    get_account_identifier_for_discord,
     get_active_minor_report,
     get_htb_user_id_for_discord,
     years_until_18,
@@ -99,14 +98,7 @@ class FlagMinorCog(discord.Cog):
             ephemeral=True,
         )
 
-        account_identifier = await get_account_identifier_for_discord(target.id)
-        if not account_identifier:
-            await status_message.edit(
-                content="Could not find linked HTB account for this user. They must be verified first.",
-            )
-            return
-
-        has_consent = await check_parental_consent(account_identifier)
+        has_consent = await check_parental_consent(target.id)
         if has_consent:
             added = await assign_minor_role(target, ctx.guild)
             await status_message.edit(
