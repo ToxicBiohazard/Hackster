@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from src.bot import Bot
 from src.core import settings  # noqa: F401
-from src.database.models import Ban, MinorReport, UserNote
+from src.database.models import MinorReport, UserNote
 from src.database.session import AsyncSessionLocal
 from src.helpers.ban import ban_member_with_epoch, get_ban, unban_member
 from src.helpers.minor_verification import (
@@ -180,12 +180,7 @@ class ApproveBanModal(Modal):
             author=interaction.user,
             needs_approval=True,
         )
-        # Get the ban id we just created
-        async with AsyncSessionLocal() as session:
-            stmt = select(Ban).filter(Ban.user_id == member.id).order_by(Ban.id.desc()).limit(1)
-            result = await session.scalars(stmt)
-            ban = result.first()
-            ban_id = ban.id if ban else None
+        ban_id = response.ban_id if response else None
         await update_report_status(
             self.report.id,
             APPROVED,
@@ -401,7 +396,6 @@ class MinorReportView(View):
                     + (" User was not banned by this report." if not existing_ban else ""),
                     ephemeral=True,
                 )
-            await update_report_status(report.id, CONSENT_VERIFIED, interaction.user.id)
             status_notes = (
                 f"Consent verified by <@{interaction.user.id}> at "
                 f"<t:{int(datetime.now(timezone.utc).timestamp())}:F>"
@@ -416,17 +410,15 @@ class MinorReportView(View):
                 f"<t:{int(datetime.now(timezone.utc).timestamp())}:F>"
             )
 
-        # Persist updated status/reviewer/timestamp
-        if has_consent:
-            report.status = CONSENT_VERIFIED
-        report.reviewer_id = interaction.user.id
-        report.updated_at = datetime.now(timezone.utc)
+        # Single write path: update status (only changes on consent found), reviewer, and timestamp.
+        now = datetime.now(timezone.utc)
+        new_status = CONSENT_VERIFIED if has_consent else report.status
         async with AsyncSessionLocal() as session:
             r = await session.get(MinorReport, report.id)
             if r:
-                r.status = report.status
-                r.reviewer_id = report.reviewer_id
-                r.updated_at = report.updated_at
+                r.status = new_status
+                r.reviewer_id = interaction.user.id
+                r.updated_at = now
                 await session.commit()
         report_for_embed = r or report
         htb_id = await get_htb_user_id_for_discord(report_for_embed.user_id)

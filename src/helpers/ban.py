@@ -90,7 +90,7 @@ async def _get_ban_or_create(
 
 
 async def _create_ban_response(
-    member: Member | User, end_date: str, dm_banned_member: bool, needs_approval: bool
+    member: Member | User, end_date: str, dm_banned_member: bool, needs_approval: bool, ban_id: int | None = None
 ) -> SimpleResponse:
     """Create a SimpleResponse for ban operations."""
     if needs_approval:
@@ -111,6 +111,7 @@ async def _create_ban_response(
         message=message,
         delete_after=0 if not needs_approval else None,
         code=BanCodes.SUCCESS,
+        ban_id=ban_id,
     )
 
 
@@ -393,7 +394,7 @@ async def ban_member_with_epoch(
         await guild.get_channel(settings.channels.SR_MOD).send(embed=embed, view=view)  # type: ignore
 
     return await _create_ban_response(
-        member, end_date, dm_banned_member, needs_approval
+        member, end_date, dm_banned_member, needs_approval, ban_id=ban_id
     )
 
 

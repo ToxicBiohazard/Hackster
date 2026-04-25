@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import discord
 import pytest
 
 from src.cmds.automation import scheduled_tasks
@@ -54,8 +55,8 @@ class TestScheduledTasksMinorRole:
     async def test_auto_remove_minor_role_skips_when_not_yet_18(self, bot):
         """Test auto_remove_minor_role skips reports where user has not reached 18."""
         now = datetime.now(timezone.utc)
-        # Report from 1 year ago, suspected_age 17 -> expires in 1 year from creation
-        created = now - timedelta(days=365)
+        # Report from 6 months ago, suspected_age 17 -> expires 1 year after creation -> still future
+        created = now - timedelta(days=180)
         report = MinorReport(
             id=1,
             user_id=999,
@@ -102,8 +103,8 @@ class TestScheduledTasksMinorRole:
     async def test_auto_remove_minor_role_removes_when_18(self, bot):
         """Test auto_remove_minor_role removes role when user has reached 18."""
         now = datetime.now(timezone.utc)
-        # Report from 3 years ago, suspected_age 15 -> 3 years until 18 -> expired
-        created = now - timedelta(days=365 * 3)
+        # Report from 4 years ago, suspected_age 15 -> expires 3 years after creation -> clearly past
+        created = now.replace(year=now.year - 4)
         report = MinorReport(
             id=1,
             user_id=999,
@@ -137,7 +138,9 @@ class TestScheduledTasksMinorRole:
             role = helpers.MockRole(id=456, name="Verified Minor")
             guild.get_role = lambda rid: role if rid == 456 else None
             bot.get_guild = MagicMock(return_value=guild)
-            mock_member = helpers.MockMember(id=999, name="User")
+            # MagicMock(spec=discord.Member) makes isinstance(mock, discord.Member) return True
+            mock_member = MagicMock(spec=discord.Member)
+            mock_member.id = 999
             mock_member.roles = [role]
             mock_member.remove_roles = AsyncMock()
             bot.get_member_or_user = AsyncMock(return_value=mock_member)

@@ -14,6 +14,8 @@ class MinorReviewReviewer(Base):
     Configurable at runtime by Administrators.
     """
 
+    __tablename__ = "minor_review_reviewer"
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(BIGINT(18), nullable=False, unique=True)
     added_by: Mapped[int | None] = mapped_column(BIGINT(18), nullable=True)

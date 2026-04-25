@@ -1,7 +1,7 @@
 # flake8: noqa: D101
 from datetime import datetime
 
-from sqlalchemy import Integer
+from sqlalchemy import ForeignKey, Integer
 from sqlalchemy.dialects.mysql import BIGINT, TEXT, TIMESTAMP, VARCHAR
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +26,8 @@ class MinorReport(Base):
         associated_ban_id: Ban record ID if user was banned via this report (nullable).
     """
 
+    __tablename__ = "minor_report"
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(BIGINT(18), nullable=False)
     reporter_id: Mapped[int] = mapped_column(BIGINT(18), nullable=False)
@@ -36,4 +38,6 @@ class MinorReport(Base):
     reviewer_id: Mapped[int | None] = mapped_column(BIGINT(18), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, nullable=False)
-    associated_ban_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    associated_ban_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("ban.id", ondelete="SET NULL"), nullable=True
+    )

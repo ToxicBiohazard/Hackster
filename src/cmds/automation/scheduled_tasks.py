@@ -124,17 +124,17 @@ class ScheduledTasks(commands.Cog):
                 continue
 
             for report in reports:
-                # Compute approximate 18th birthday based on suspected age at report time.
+                # Compute exact 18th birthday based on suspected age at report time.
                 created_at = report.created_at
                 if created_at.tzinfo is None:
                     created_at = created_at.replace(tzinfo=timezone.utc)
                 years = years_until_18(report.suspected_age)
-                expires_at = created_at + timedelta(days=365 * years)
+                expires_at = created_at.replace(year=created_at.year + years)
                 if now < expires_at:
                     continue
 
-                member: Member | None = await self.bot.get_member_or_user(guild, report.user_id)
-                if not member:
+                member = await self.bot.get_member_or_user(guild, report.user_id)
+                if not isinstance(member, Member):
                     continue
 
                 role_id = settings.roles.VERIFIED_MINOR
@@ -174,7 +174,7 @@ class ScheduledTasks(commands.Cog):
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=timezone.utc)
         years = years_until_18(report.suspected_age)
-        expires_at = created_at + timedelta(days=365 * years)
+        expires_at = created_at.replace(year=created_at.year + years)
         if now >= expires_at:
             return
 
