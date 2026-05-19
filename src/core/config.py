@@ -141,6 +141,7 @@ class Roles(BaseSettings):
     ACADEMY_CAPE: Optional[int] = None
     ACADEMY_CJCA: Optional[int] = None
     ACADEMY_CWPE: Optional[int] = None
+    ACADEMY_COAE: Optional[int] = None
     # Joinable roles
     UNICTF2022: Optional[int] = None
     BIZCTF2022: Optional[int] = None
